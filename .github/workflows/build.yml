@@ -70,13 +70,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force pkg | Out-Null
           Copy-Item dist\PlaylistSplitter.exe pkg\
-          Copy-Item 사용법.md pkg\
+          Get-ChildItem -Filter *.md | Where-Object { $_.Name -ne 'README.md' } | Copy-Item -Destination pkg\
           Compress-Archive -Path pkg\* -DestinationPath ${{ matrix.asset }}
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          mkdir pkg && cp -R dist/PlaylistSplitter.app pkg/ && cp 사용법.md pkg/
+          mkdir pkg && cp -R dist/PlaylistSplitter.app pkg/
+          find . -maxdepth 1 -name '*.md' ! -name README.md -exec cp {} pkg/ \;
           ditto -c -k pkg ${{ matrix.asset }}
 
       - uses: actions/upload-artifact@v4
