@@ -1,0 +1,99 @@
+# v1.0.0 처럼 v로 시작하는 태그를 올리면 윈도우/맥용 프로그램을 빌드해 Releases 에 올립니다.
+# Actions 탭에서 "Run workflow" 로 수동 실행하면 빌드 결과만 Artifacts 로 받을 수 있습니다.
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: PlaylistSplitter-windows.zip
+            optional: false
+          - os: macos-latest          # Apple Silicon (M1~)
+            asset: PlaylistSplitter-mac-apple-silicon.zip
+            optional: false
+          # 인텔 맥용도 필요하면 아래 3줄의 # 를 지우세요 (GitHub에 인텔 맥 러너가 있을 때만 동작)
+          # - os: macos-15-intel
+          #   asset: PlaylistSplitter-mac-intel.zip
+          #   optional: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller --noconfirm --onefile --windowed --name PlaylistSplitter --collect-all imageio_ffmpeg app.py
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --noconfirm --windowed --name PlaylistSplitter --collect-all imageio_ffmpeg app.py
+          # 들어 있는 ffmpeg 와 앱 전체를 ad-hoc 서명 (서명이 없으면 Apple Silicon 에서 실행이 막힘)
+          find dist/PlaylistSplitter.app -type f -name 'ffmpeg-*' -exec chmod +x {} \; -exec codesign --force --sign - {} \;
+          codesign --force --deep --sign - dist/PlaylistSplitter.app
+
+      - name: Self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\PlaylistSplitter.exe -ArgumentList '--selftest' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "selftest failed: $($p.ExitCode)" }
+
+      - name: Self-test (macOS)
+        if: runner.os == 'macOS'
+        run: dist/PlaylistSplitter.app/Contents/MacOS/PlaylistSplitter --selftest
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force pkg | Out-Null
+          Copy-Item dist\PlaylistSplitter.exe pkg\
+          Copy-Item 사용법.md pkg\
+          Compress-Archive -Path pkg\* -DestinationPath ${{ matrix.asset }}
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir pkg && cp -R dist/PlaylistSplitter.app pkg/ && cp 사용법.md pkg/
+          ditto -c -k pkg ${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*.zip
+          generate_release_notes: true
