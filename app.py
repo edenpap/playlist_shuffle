@@ -19,7 +19,7 @@ import licensing
 from tkhelpers import install_edit_helpers, paste_into
 
 APP_NAME = "노래 분할기"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 PLACEHOLDER = (
     "여기에 타임라인을 붙여 넣으세요. 예)\n"

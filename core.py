@@ -257,9 +257,14 @@ def _clean_artist(name: str) -> str:
     return name
 
 
+_SEP_CHARS = " -\u2013\u2014|\uff5c\u2503\u2502\u00a6\u00b7\u2022"
+
+
 def _split_line(rest: str, artist_first: bool):
     """'가수 - 제목' / '제목 - 가수' / '가수_제목' / '제목-가수' 를 (가수, 제목)으로"""
-    parts = re.split(r"\s+[-\u2013\u2014]\s+", rest)
+    # 세로 막대(| ｜ ┃ │ ¦)는 앞뒤 공백 없이도 구분자, 대시는 앞뒤에 공백이 있을 때만 구분자
+    parts = [x for x in re.split(r"\s*[|\uff5c\u2503\u2502\u00a6]\s*|\s+[-\u2013\u2014]\s+", rest)
+             if x.strip(_SEP_CHARS)]
     if len(parts) >= 2:
         if artist_first:
             return parts[0], " - ".join(parts[1:])
@@ -310,8 +315,10 @@ def parse_timeline_text(text: str, artist_first: bool = True, default_artist: st
             merged += 1
             continue
 
+        rest = re.sub(r"[\u3000\u00a0\u2007\u202f\t]+", " ", rest)   # 전각 공백, 탭 등 → 일반 공백
+        rest = re.sub(r" {2,}", " ", rest).strip()
         artist, song = _split_line(rest, artist_first) if rest else ("", "")
-        artist, song = artist.strip(), song.strip()
+        artist, song = artist.strip(_SEP_CHARS), song.strip(_SEP_CHARS)
 
         # (Feat. 가수) / (with 가수) 는 제목에서 빼고 가수 쪽에 &로 붙임
         feats = []

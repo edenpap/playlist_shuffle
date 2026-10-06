@@ -99,4 +99,4 @@ pyinstaller --noconfirm --windowed --name PlaylistSplitter --collect-all imageio
 
 ## 라이선스 참고
 
-앱에 들어가는 ffmpeg은 `imageio-ffmpeg` 패키지가 제공하는 GPL 빌드입니다. GPL 소프트웨어를 함께 배포할 때는 라이선스 고지와 소스 코드 제공 의무가 따르므로, 저장소를 공개로 두고 GPL 라이선스를 명시하는 방식을 권장합니다. 정확한 조건은 ffmpeg 라이선스 문서(https://ffmpeg.org/legal.html)를 확인하세요.
+앱에 들어가는 ffmpeg은 `imageio-ffmpeg` 패키지가 제공하는 GPL 빌드입니다. 앱은 ffmpeg을 별도 프로그램으로 실행하는 구조이고, 사용자에게 가는 `사용법.md`에 ffmpeg 사용 고지와 소스 코드 위치를 적어 두었습니다. 배포 파일에서 이 고지를 빼지 마세요. 판매 규모가 커지면 ffmpeg 라이선스 문서(https://ffmpeg.org/legal.html)를 기준으로 전문가 확인을 받는 것을 권장합니다.
