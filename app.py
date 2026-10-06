@@ -16,9 +16,10 @@ from tkinter.scrolledtext import ScrolledText
 
 import core
 import licensing
+from tkhelpers import install_edit_helpers, paste_into
 
 APP_NAME = "노래 분할기"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 PLACEHOLDER = (
     "여기에 타임라인을 붙여 넣으세요. 예)\n"
@@ -67,7 +68,10 @@ class LicenseDialog(tk.Toplevel):
         ttk.Label(f, text="신청서에는 기기 코드가 미리 채워져 있습니다. 이름과 이메일만 적어 제출하면\n"
                           "이메일로 라이선스 키를 보내 드립니다.", foreground="gray").pack(anchor="w", pady=(4, 12))
 
-        ttk.Label(f, text="2. 받은 라이선스 키").pack(anchor="w")
+        krow = ttk.Frame(f)
+        krow.pack(fill="x")
+        ttk.Label(krow, text="2. 받은 라이선스 키").pack(side="left")
+        ttk.Button(krow, text="붙여넣기", command=self._paste_key).pack(side="right")
         self.key_text = tk.Text(f, height=4, width=56, wrap="char")
         self.key_text.pack(anchor="w", pady=(4, 10))
 
@@ -90,6 +94,11 @@ class LicenseDialog(tk.Toplevel):
         self.clipboard_clear()
         self.clipboard_append(self.code)
         self.msg.configure(text="기기 코드를 복사했습니다.", foreground="#2e7d32")
+
+    def _paste_key(self):
+        self.key_text.delete("1.0", "end")
+        if not paste_into(self.key_text):
+            self.msg.configure(text="클립보드가 비어 있습니다. 메일에서 키를 먼저 복사해 주세요.", foreground="#c62828")
 
     def _open_form(self):
         webbrowser.open(licensing.form_url())
@@ -137,6 +146,7 @@ class App(tk.Tk):
         self.tracklist_path = None
         self._out_auto = True
 
+        install_edit_helpers(self)
         self._build()
         self._show_placeholder()
         self.after(100, self._poll)
@@ -166,6 +176,7 @@ class App(tk.Tk):
         lhead.pack(fill="x")
         ttk.Label(lhead, text="타임라인 붙여넣기").pack(side="left")
         ttk.Button(lhead, text="지우기", command=self._clear_text).pack(side="right")
+        ttk.Button(lhead, text="붙여넣기", command=self._paste_timeline).pack(side="right", padx=4)
         ttk.Button(lhead, text="CSV 불러오기", command=self._load_csv).pack(side="right", padx=4)
         self.text = tk.Text(left, wrap="none", undo=True, height=16, width=42)
         self.text.pack(fill="both", expand=True, pady=(4, 0))
@@ -306,6 +317,13 @@ class App(tk.Tk):
         self.text.insert("1.0", value)
         self.text.configure(foreground=self._text_fg)
         self._reparse()
+
+    def _paste_timeline(self):
+        self._hide_placeholder()
+        if paste_into(self.text):
+            self._schedule_parse()
+        else:
+            self._show_placeholder()
 
     def _clear_text(self):
         self.text.delete("1.0", "end")
