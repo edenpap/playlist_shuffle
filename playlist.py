@@ -36,7 +36,10 @@ def main():
     ap.add_argument("--seed", type=int)
     args = ap.parse_args()
     try:
-        res = core.run(args.input or find_input_file(), args.csv, args.out,
+        tracks, fixed_idx, warnings = core.load_tracks(args.csv)
+        for w in warnings:
+            print(f"[경고] {w}")
+        res = core.run(args.input or find_input_file(), tracks, fixed_idx, args.out,
                        shuffle=args.shuffle, seed=args.seed)
     except core.SplitError as e:
         sys.exit(f"[오류] {e}")
