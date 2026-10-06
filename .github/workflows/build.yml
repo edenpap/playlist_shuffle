@@ -39,16 +39,16 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt pyinstaller pillow
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        run: pyinstaller --noconfirm --onefile --windowed --name PlaylistSplitter --collect-all imageio_ffmpeg app.py
+        run: pyinstaller --noconfirm --onefile --windowed --name PlaylistSplitter --icon icons/app.png --collect-all imageio_ffmpeg app.py
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --noconfirm --windowed --name PlaylistSplitter --collect-all imageio_ffmpeg app.py
+          pyinstaller --noconfirm --windowed --name PlaylistSplitter --icon icons/app.png --collect-all imageio_ffmpeg app.py
           # 들어 있는 ffmpeg 와 앱 전체를 ad-hoc 서명 (서명이 없으면 Apple Silicon 에서 실행이 막힘)
           find dist/PlaylistSplitter.app -type f -name 'ffmpeg-*' -exec chmod +x {} \; -exec codesign --force --sign - {} \;
           codesign --force --deep --sign - dist/PlaylistSplitter.app
@@ -89,7 +89,7 @@ jobs:
       - name: Build KeyMaker (macOS)
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --noconfirm --windowed --name KeyMaker --paths . owner_tools/keymaker.py
+          pyinstaller --noconfirm --windowed --name KeyMaker --icon icons/keymaker.png --paths . owner_tools/keymaker.py
           codesign --force --deep --sign - dist/KeyMaker.app
           dist/KeyMaker.app/Contents/MacOS/KeyMaker --selftest
           ditto -c -k --keepParent dist/KeyMaker.app KeyMaker-mac.zip
