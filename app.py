@@ -8,14 +8,17 @@ import queue
 import subprocess
 import sys
 import threading
+import webbrowser
+import datetime as dt
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import core
+import licensing
 
 APP_NAME = "노래 분할기"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 PLACEHOLDER = (
     "여기에 타임라인을 붙여 넣으세요. 예)\n"
@@ -36,6 +39,73 @@ def open_folder(path):
             subprocess.Popen(["xdg-open", path])
     except Exception as e:
         messagebox.showerror(APP_NAME, f"폴더를 열 수 없습니다.\n{e}")
+
+
+class LicenseDialog(tk.Toplevel):
+    """기기 코드 표시 + 사용 신청 + 키 등록 창. 등록되면 self.result 에 라이선스 정보"""
+
+    def __init__(self, master, message=""):
+        super().__init__(master)
+        self.title(f"{APP_NAME} 라이선스")
+        self.resizable(False, False)
+        self.result = None
+        self.code = licensing.device_code()
+
+        f = ttk.Frame(self, padding=20)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text="라이선스 등록", font=("", 15, "bold")).pack(anchor="w")
+        self.msg = ttk.Label(f, text=message, foreground="#c62828", wraplength=440, justify="left")
+        self.msg.pack(anchor="w", pady=(6, 10))
+
+        ttk.Label(f, text="1. 이 컴퓨터의 기기 코드").pack(anchor="w")
+        row = ttk.Frame(f)
+        row.pack(anchor="w", pady=(4, 6))
+        ttk.Label(row, text=self.code, font=("Courier", 20, "bold")).pack(side="left")
+        ttk.Button(row, text="코드 복사", command=self._copy_code).pack(side="left", padx=12)
+
+        ttk.Button(f, text="사용 신청하기 (신청서가 열립니다)", command=self._open_form).pack(anchor="w")
+        ttk.Label(f, text="신청서에는 기기 코드가 미리 채워져 있습니다. 이름과 이메일만 적어 제출하면\n"
+                          "이메일로 라이선스 키를 보내 드립니다.", foreground="gray").pack(anchor="w", pady=(4, 12))
+
+        ttk.Label(f, text="2. 받은 라이선스 키").pack(anchor="w")
+        self.key_text = tk.Text(f, height=4, width=56, wrap="char")
+        self.key_text.pack(anchor="w", pady=(4, 10))
+
+        btns = ttk.Frame(f)
+        btns.pack(fill="x")
+        ttk.Button(btns, text="등록", command=self._activate).pack(side="left")
+        ttk.Button(btns, text="닫기", command=self.destroy).pack(side="left", padx=6)
+
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.update_idletasks()
+        w, h = self.winfo_reqwidth(), self.winfo_reqheight()
+        x = (self.winfo_screenwidth() - w) // 2
+        y = (self.winfo_screenheight() - h) // 3
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        self.lift()
+        self.focus_force()
+        self.grab_set()
+
+    def _copy_code(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.code)
+        self.msg.configure(text="기기 코드를 복사했습니다.", foreground="#2e7d32")
+
+    def _open_form(self):
+        webbrowser.open(licensing.form_url())
+
+    def _activate(self):
+        key = self.key_text.get("1.0", "end").strip()
+        if not key:
+            self.msg.configure(text="받은 라이선스 키를 붙여 넣어 주세요.", foreground="#c62828")
+            return
+        ok, info, m = licensing.activate(key)
+        if not ok:
+            self.msg.configure(text=m, foreground="#c62828")
+            return
+        self.result = info
+        messagebox.showinfo(APP_NAME, f"등록되었습니다.\n사용 기한: {info['expires'].isoformat()}까지", parent=self)
+        self.destroy()
 
 
 class App(tk.Tk):
@@ -184,7 +254,8 @@ class App(tk.Tk):
         self.open_btn.pack(side="left")
         self.copy_btn = ttk.Button(btns, text="tracklist 복사", command=self._copy_tracklist, state="disabled")
         self.copy_btn.pack(side="left", padx=6)
-        ttk.Button(btns, text="CSV로 저장", command=self._save_csv).pack(side="right")
+        ttk.Button(btns, text="라이선스", command=self._open_license).pack(side="right")
+        ttk.Button(btns, text="CSV로 저장", command=self._save_csv).pack(side="right", padx=6)
 
         self.bar = ttk.Progressbar(root, mode="determinate", maximum=100)
         self.bar.grid(row=8, column=0, sticky="ew", pady=(4, 2))
@@ -192,6 +263,24 @@ class App(tk.Tk):
         self.log = ScrolledText(root, height=7, wrap="word", state="disabled")
         self.log.grid(row=10, column=0, sticky="nsew", pady=(4, 0))
         root.rowconfigure(10, weight=1)
+
+    # ================= 라이선스 =================
+    def set_license(self, info):
+        self.license_info = info
+        left = (info["expires"] - dt.date.today()).days
+        who = f" · {info['name']}" if info.get("name") else ""
+        self.title(f"{APP_NAME} {APP_VERSION}{who} · {info['expires'].isoformat()}까지 (D-{left})")
+
+    def _open_license(self, message=""):
+        if not message:
+            info = getattr(self, "license_info", None)
+            message = (f"현재 사용 기한: {info['expires'].isoformat()}까지. 새 키를 받았다면 아래에 등록하세요."
+                       if info else "")
+        d = LicenseDialog(self, message)
+        self.wait_window(d)
+        if d.result:
+            self.set_license(d.result)
+        return d.result
 
     # ================= 붙여넣기 칸 =================
     def _show_placeholder(self):
@@ -375,6 +464,9 @@ class App(tk.Tk):
 
     # ================= 실행 =================
     def _start(self):
+        ok, info, msg = licensing.check()
+        if not ok and not self._open_license(msg):
+            return
         if self._parse_job:
             self._reparse()
         audio, out = self.audio_var.get().strip(), self.out_var.get().strip()
@@ -527,7 +619,44 @@ def selftest():
     lines = open(res["tracklist"], encoding="utf-8").read().splitlines()
     assert lines[0] == "01. 00:00:00 둘째 곡 - 가수b & 가수c", lines
     assert lines[1] == "02. 00:00:07 첫 곡 - 가수a", lines
+
+    # 라이선스: 이 기기 코드로 키를 만들어 검증 (저장은 하지 않음)
+    import ed25519_min
+    secret = os.urandom(32)
+    pub = ed25519_min.public_key(secret).hex()
+    code = licensing.device_code()
+    assert len(code) == 9 and code[4] == "-", code
+    key = licensing.make_key(secret, code, dt.date.today() + dt.timedelta(days=30), "테스트")
+    info = licensing.parse_key(key, pub)
+    assert info["code"] == code and info["name"] == "테스트", info
+    try:
+        licensing.parse_key(key[:-3] + ("AAA" if not key.endswith("AAA") else "BBB"), pub)
+        raise AssertionError("tampered key accepted")
+    except licensing.LicenseError:
+        pass
     print("SELFTEST OK")
+
+
+def main():
+    app = App()
+    app.withdraw()
+    ok, info, msg = licensing.check()
+    if not ok:
+        d = LicenseDialog(app, msg)
+        app.wait_window(d)
+        info = d.result
+        if not info:
+            app.destroy()
+            return
+    licensing.touch()
+    app.set_license(info)
+    app.deiconify()
+    left = (info["expires"] - dt.date.today()).days
+    if left <= 7:
+        app.after(300, lambda: messagebox.showinfo(
+            APP_NAME, f"사용 기한이 {left}일 남았습니다 ({info['expires'].isoformat()}까지).\n"
+                      "계속 사용하려면 새 라이선스 키를 받아 '라이선스' 버튼으로 등록하세요."))
+    app.mainloop()
 
 
 if __name__ == "__main__":
@@ -538,4 +667,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"SELFTEST FAILED: {e!r}")
             sys.exit(1)
-    App().mainloop()
+    main()
